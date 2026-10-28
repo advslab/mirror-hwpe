@@ -1,0 +1,57 @@
+name: source probe
+
+# Manual only. Checks from a runner whether the bulletin sources answer and
+# how fast: the anonymous search token, listing page 1, then the documents
+# of the first 3 rows in the mirrored locale; reports latency, every non-200
+# answer and every 200 that is not what was asked for. Stores nothing.
+# Set the repository secrets TOKEN_URL (the token's URL with its hub query),
+# SEARCH_URL (the listing's URL), SEARCH_HUB (the hub the listing names) and
+# DOCUMENT_BASE (the documents' root with a trailing slash)
+# (Settings → Secrets and variables → Actions → Secrets); they are masked in every log.
+on:
+  workflow_dispatch:
+    inputs:
+      pace:
+        description: "seconds between requests"
+        required: false
+        default: "1"
+      more:
+        description: "documents after the first (default 2)"
+        required: false
+        default: ""
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: refuse without the source secrets
+        env:
+          TOKEN_URL: ${{ secrets.TOKEN_URL }}
+          SEARCH_URL: ${{ secrets.SEARCH_URL }}
+          SEARCH_HUB: ${{ secrets.SEARCH_HUB }}
+          DOCUMENT_BASE: ${{ secrets.DOCUMENT_BASE }}
+        run: |
+          missing=0
+          for n in TOKEN_URL SEARCH_URL SEARCH_HUB DOCUMENT_BASE; do
+            if [ -z "${!n}" ]; then echo "::error::repository secret $n is not set"; missing=1; fi
+          done
+          exit $missing
+      - name: probe
+        env:
+          TOKEN_URL: ${{ secrets.TOKEN_URL }}
+          SEARCH_URL: ${{ secrets.SEARCH_URL }}
+          SEARCH_HUB: ${{ secrets.SEARCH_HUB }}
+          DOCUMENT_BASE: ${{ secrets.DOCUMENT_BASE }}
+          PACE: ${{ inputs.pace }}
+          MORE: ${{ inputs.more }}
+          SPACES_ENDPOINT: ${{ secrets.SPACES_ENDPOINT }}
+          SPACES_BUCKET: ${{ secrets.SPACES_BUCKET }}
+          SPACES_KEY: ${{ secrets.SPACES_KEY }}
+          SPACES_SECRET: ${{ secrets.SPACES_SECRET }}
+          SPACES_REGION: sgp1
+        run: |
+          chmod +x bin/source-probe
+          sha256sum bin/source-probe
+          bin/source-probe
